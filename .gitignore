@@ -4,3 +4,4 @@
 *.hi
 selfinst/selfinst*
 standalone_builder
+packer/packer

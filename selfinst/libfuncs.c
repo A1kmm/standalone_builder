@@ -10,11 +10,11 @@
                 "mov %%ebp,%%ecx;" \
                 "pop %%ebp;"
 
-int open(const char* pathname, int flags)
+int open(const char* pathname, int flags, int mode)
 {
   int result;
   asm("movl $0x5, %%eax;" SYSCALL
-      : "=a"(result) : "b"(pathname), "c"(flags));
+      : "=a"(result) : "b"(pathname), "c"(flags), "d"(mode));
   return result;
 }
 
@@ -83,9 +83,16 @@ int write(int fd, const void* buf, size_t count)
 int read(int fd, void* buf, size_t count)
 {
   int result;
-  asm("movl $0x3, %%eax;"
-      "mov %%ecx, %%ebp;" SYSCALL
+  asm("movl $0x3, %%eax;" SYSCALL
       : "=a"(result) : "b"(fd), "c"(buf), "d"(count));
+  return result;
+}
+
+int ftruncate(int fd, off_t length)
+{
+  int result;
+  asm("movl $93, %%eax;" SYSCALL
+      : "=a"(result) : "b"(fd), "c"(length));
   return result;
 }
 
@@ -127,6 +134,14 @@ int chdir(const char* path)
   asm("movl $12, %%eax;" SYSCALL
       : "=a"(result) : "b"(path));
   return result;
+}
+
+int symlink(const char* oldpath, const char* newpath)
+{
+  int result;
+  asm("movl $83, %%eax;" SYSCALL
+      : "=a"(result) : "b"(oldpath), "c"(newpath));
+  return result;  
 }
 
 int close(int fd)

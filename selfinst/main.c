@@ -5,6 +5,8 @@
 #include <sys/mman.h>
 #include <sys/wait.h>
 
+#undef SHOW_ERROR_DETAILS
+
 void exit(int status);
 int mkdir(const char* filename, mode_t mode);
 
@@ -17,26 +19,35 @@ int mkdir(const char* filename, mode_t mode);
 
 #define CONSTOUT(v) write(1, v, sizeof(v) - 1)
 
+char **envp;
+
 enum tarstate {
   IN_HEADER,
   IN_FILENAME,
   IN_FILE
 };
 
+enum tartype {
+  FT_REGULAR,
+  FT_DIRECTORY,
+  FT_SYMLINK
+};
+
 struct fileheader {
   size_t namelen;
   size_t filelen;
   unsigned int mode;
+  enum tartype type;
 };
 
 struct simpletar
 {
   enum tarstate state;
-  size_t offset;
   size_t len;
   char* ptr, *ptrorig;
   struct fileheader header;
   char filename[512];
+  char special[512];
 };
 
 /* Note: the start of the strings must not appear later in the string. */
@@ -51,6 +62,32 @@ static char* substSearch[] = {
 static int substLength[] = {48, 344};
 #define SubstCount 2
 
+void reset_st(struct simpletar* st)
+{
+  st->state = IN_HEADER;
+  st->ptr = (char*)&st->header;
+  st->len = sizeof(struct fileheader);
+}
+
+void message(const char* msg)
+{
+  pid_t p = fork();
+  int status;
+  if (p == 0)
+  {
+    const char* argv_gd[] = {"/usr/bin/gdialog", "--title", "Install",
+                             "--msgbox", msg, "10", "60", NULL};
+    execve("/usr/bin/gdialog", (char**)argv_gd, envp);
+    execve("/usr/bin/kdialog", (char**)argv_gd, envp);
+    execve("/usr/bin/whiptail", (char**)argv_gd, envp);
+    execve("/usr/bin/dialog", (char**)argv_gd, envp);
+    write(1, msg, strlen(msg));
+    exit(0);
+  }
+  else
+    waitpid(p, &status, 0);
+}
+
 void
 process_data(struct xz_buf* b, struct simpletar* st)
 {
@@ -60,7 +97,7 @@ process_data(struct xz_buf* b, struct simpletar* st)
     size_t n = b->out_pos - done;
     if (n > st->len)
       n = st->len;
-    memcpy(st->ptr, b->out, n);
+    memcpy(st->ptr, b->out + done, n);
     done += n;
     st->ptr += n;
     st->len -= n;
@@ -83,60 +120,69 @@ process_data(struct xz_buf* b, struct simpletar* st)
       case IN_FILENAME:
         st->state = IN_FILE;
         st->len = st->header.filelen;
-        st->filename[st->header.filelen] = 0;
-        fd = open(st->filename, O_CREAT | O_RDWR, (mode_t)st->header.mode);
-        st->ptrorig = st->ptr =
-          mmap(NULL, st->header.filelen, PROT_READ | PROT_WRITE,
-               0, fd, 0);
-        close(fd);
+        st->filename[st->header.namelen] = 0;
+        if (st->header.type == FT_REGULAR)
+        {
+          fd = open(st->filename, O_CREAT | O_RDWR | O_TRUNC, (mode_t)st->header.mode);
+          if (fd < 0)
+          {
+            message("Cannot install a file; check the permissions on the install directory and that you have enough free disk space.\n");
+            exit(1);
+          }
+          ftruncate(fd, st->header.filelen);
+          st->ptrorig = st->ptr =
+            mmap(NULL, st->header.filelen, PROT_READ | PROT_WRITE,
+                 MAP_SHARED, fd, 0);
+          close(fd);
+        }
+        else if (st->header.type == FT_DIRECTORY)
+        {
+          mkdir(st->filename, (mode_t)st->header.mode);
+          reset_st(st);
+        }
+        else if (st->header.type == FT_SYMLINK)
+        {
+          if (st->len > 511)
+            st->len = 511;
+          st->ptr = st->special;
+        }
+
         continue;
       case IN_FILE:
-        st->ptr = st->ptrorig;
+        if (st->header.type == FT_SYMLINK)
         {
-          for (fd = 0; fd < st->header.filelen; fd++)
-          {
-            for (i = 0; i < SubstCount; i++)
-            {
-              if (*st->ptr == substSearch[i][hit[i]])
-                hit[i]++;
-              else
-                hit[i] = 0;
-              if (hit[i] == substLength[i])
-              {
-                memcpy(st->ptr - 1 - substLength[i], substReplace, substLength[i]);
-                for (i = 0; i < SubstCount; i++)
-                  hit[i] = 0;
-              }
-            }
-            st->ptr++;
-          }
+          *(st->ptr) = 0;
+          symlink(st->special, st->filename);
         }
-        munmap(st->ptrorig, st->header.filelen);
+        else
+        {
+          st->ptr = st->ptrorig;
+          {
+            for (fd = 0; fd < st->header.filelen; fd++)
+            {
+              for (i = 0; i < SubstCount; i++)
+              {
+                if (*st->ptr == substSearch[i][hit[i]])
+                  hit[i]++;
+                else
+                  hit[i] = 0;
+                if (hit[i] == substLength[i])
+                {
+                  memcpy(st->ptr - 1 - substLength[i], substReplace, substLength[i]);
+                  for (i = 0; i < SubstCount; i++)
+                    hit[i] = 0;
+                }
+              }
+              st->ptr++;
+            }
+          }
+          munmap(st->ptrorig, st->header.filelen);
+        }
+        reset_st(st);
         continue;
       }
     }
   }
-}
-
-char **envp;
-
-void message(const char* msg)
-{
-  pid_t p = fork();
-  int status;
-  if (p == 0)
-  {
-    const char* argv_gd[] = {"/usr/bin/gdialog", "--title", "Install",
-                             "--msgbox", msg, "10", "60", NULL};
-    execve("/usr/bin/gdialog", (char**)argv_gd, envp);
-    execve("/usr/bin/kdialog", (char**)argv_gd, envp);
-    execve("/usr/bin/whiptail", (char**)argv_gd, envp);
-    execve("/usr/bin/dialog", (char**)argv_gd, envp);
-    write(1, msg, strlen(msg));
-    exit(0);
-  }
-  else
-    waitpid(p, &status, 0);
 }
 
 const char* question(const char* msg, const char* defaultVal,
@@ -202,10 +248,7 @@ int
 main(int argc, char** argv)
 {
   struct simpletar st;
-  st.state = IN_HEADER;
-  st.offset = 0;
-  st.ptr = (char*)&st.header;
-  st.len = sizeof(struct fileheader);
+  reset_st(&st);
 
   envp = argv;
   while (*envp++ != NULL)
@@ -311,8 +354,9 @@ main(int argc, char** argv)
   if (b.in_pos != 0)
   {
     memmove(readbuf, readbuf + b.in_pos, b.in_size - b.in_pos);
+    b.in_size -= b.in_pos;
     b.in_pos = 0;
-    b.in_size += read(fd, readbuf, sizeof(readbuf) - b.in_size);
+    b.in_size += read(fd, readbuf + b.in_size, sizeof(readbuf) - b.in_size);
   }
 
   while (1)
@@ -327,6 +371,7 @@ main(int argc, char** argv)
     
     if (b.out_pos == sizeof(decomp)) {
       process_data(&b, &st);
+      b.out_pos = 0;
     }
 
     if (ret == XZ_OK)
@@ -347,9 +392,29 @@ main(int argc, char** argv)
       return 1;
       
     case XZ_FORMAT_ERROR:
+#ifdef SHOW_ERROR_DETAILS
+      message("Format error.\n");
+      return 1;
+#endif
+
     case XZ_OPTIONS_ERROR:
+#ifdef SHOW_ERROR_DETAILS
+      message("Options error.\n");
+      return 1;
+#endif
+
     case XZ_DATA_ERROR:
+#ifdef SHOW_ERROR_DETAILS
+      message("Data error.\n");
+      return 1;
+#endif
+
     case XZ_BUF_ERROR:
+#ifdef SHOW_ERROR_DETAILS
+      message("Buffer error.\n");
+      return 1;
+#endif
+
     default:
       message("Package is corrupt, please re-download.\n");
       return 1;

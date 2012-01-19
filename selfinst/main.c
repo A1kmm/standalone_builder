@@ -10,6 +10,10 @@
 void exit(int status);
 int mkdir(const char* filename, mode_t mode);
 
+#ifndef FINAL_EXECVE
+#define FINAL_EXECVE {"./prodtimer", "--setup", NULL}
+#endif
+
 #ifndef PRODUCT
 #define PRODUCT "ProdTimer"
 #endif
@@ -384,6 +388,10 @@ main(int argc, char** argv)
     case XZ_STREAM_END:
       xz_dec_end(s);
       message("Installation was successful.\n");
+      {
+        const char* argv_final[] = FINAL_EXECVE;
+        execve(argv_final[0], (char**)argv_final, envp);
+      }
       return 0;
       
     case XZ_MEM_ERROR:
@@ -420,6 +428,6 @@ main(int argc, char** argv)
       return 1;
     }
   }
-  
+
   return 0;
 }

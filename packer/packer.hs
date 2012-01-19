@@ -57,7 +57,7 @@ mainWithOpts (PackerOpts { directory = directory, selfinst = selfinst,
     withFile selfinst ReadMode $ \hSelfInst ->
       BS.hGetContents hSelfInst >>= BS.hPut hInstaller
     hPutStrLn hInstaller "MAGICMARKER"
-    (xzin, xzout, xzerr, procID) <- runInteractiveCommand ("xz -c -Ccrc32 -")
+    (xzin, xzout, xzerr, procID) <- runInteractiveCommand ("xz -7 -c -Ccrc32 -")
     (do
         outmvar <- newEmptyMVar
         forkIO $ BS.hGetContents xzout >>= BS.hPut hInstaller >> putMVar outmvar ()

@@ -5,3 +5,5 @@
 selfinst/selfinst*
 standalone_builder
 packer/packer
+
+nsis_subst/dosubst.dll

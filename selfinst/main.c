@@ -172,7 +172,7 @@ process_data(struct xz_buf* b, struct simpletar* st)
                   hit[i] = 0;
                 if (hit[i] == substLength[i])
                 {
-                  memcpy(st->ptr - 1 - substLength[i], substReplace, substLength[i]);
+                  memcpy(st->ptr - 1 - substLength[i], substReplace[i], substLength[i]);
                   for (i = 0; i < SubstCount; i++)
                     hit[i] = 0;
                 }

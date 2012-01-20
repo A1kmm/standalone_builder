@@ -15,7 +15,7 @@ parseOpen = do
   return r
 
 detectShared =
-  try ((string ".so" <|> string ".dll") >>
+  try ((try (string ".so") <|> try (string ".dll")) >>
        ((char '.' >> return ()) <|> eof) >> probablyShared) <|>
   (anyChar >> detectShared) <|>
   (eof >> return False)
@@ -39,7 +39,7 @@ main = do
   (prog:copyDir:_) <- getArgs
   (_, _, stderr) <- readProcessWithExitCode "/usr/bin/strace" ["-f", "-e", "open", prog] ""
   
-  print $ rights $ map (parse parseOpen "") (lines stderr)
+  print $ rights $ map (parse parseOpenMaybePID "") (lines stderr)
   let opened = filter isShared . rights $ map (parse parseOpenMaybePID "") (lines stderr)
   forM_ opened $ \source -> do
     let (_, basename) = splitFileName source

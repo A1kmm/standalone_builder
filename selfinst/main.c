@@ -107,8 +107,6 @@ process_data(struct xz_buf* b, struct simpletar* st)
     st->len -= n;
     int fd, i;
     int hit[SubstCount];
-    for (i = 0; i < SubstCount; i++)
-      hit[i] = 0;
 
     if (st->len == 0)
     {
@@ -160,6 +158,8 @@ process_data(struct xz_buf* b, struct simpletar* st)
         }
         else
         {
+          for (i = 0; i < SubstCount; i++)
+            hit[i] = 0;
           st->ptr = st->ptrorig;
           {
             for (fd = 0; fd < st->header.filelen; fd++)

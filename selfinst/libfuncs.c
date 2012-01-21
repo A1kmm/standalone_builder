@@ -2,13 +2,13 @@
 #include <sys/mman.h>
 #include <unistd.h>
 
-#define SYSCALL "push %%ebp;" \
-                "mov %%ecx, %%ebp;" \
-                "syscall;" \
+#define SYSCALL /* "push %%ebp;"*/  \
+                /*"mov %%ecx, %%ebp;" */ \
+                "int $0x80;" \
                 "mov $0x2b,%%ecx;" \
                 "mov %%ecx,%%ss;" \
                 "mov %%ebp,%%ecx;" \
-                "pop %%ebp;"
+                /* "pop %%ebp;" */
 
 int open(const char* pathname, int flags, int mode)
 {
@@ -112,7 +112,7 @@ void* mmap(void *addr, size_t length, int prot, int flags,
   void* result;
   offset >>= 13;
   asm("push %%ebp;"
-      "movl %6, %%ebp;"
+      "movl $0, %%ebp;"
       "movl $192, %%eax;" SYSCALL
       "pop %%ebp;"
       : "=a"(result) : "b"(addr), "c"(length), "d"(prot), "S"(flags), "D"(fd),

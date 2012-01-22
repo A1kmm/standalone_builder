@@ -177,11 +177,11 @@ void* malloc(size_t sz)
   }
   return addr;
 #else
-  if (((sz - 4) & 0xFFF) != 0)
-  {
-    sz = ((sz - 4) | 0xFFF) + 1 - 4;
-  }
-  void** r = mmap(NULL, sz + 4, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+  sz += 4;
+  if ((sz & 0xFFF) != 0)
+    sz = (sz | 0xFFF) + 1;
+
+  void** r = mmap(NULL, sz, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
   *r = (void*)sz;
   return (void*)(r + 1);
 #endif

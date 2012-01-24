@@ -5,10 +5,10 @@
 #define SYSCALL /* "push %%ebp;"*/  \
                 /*"mov %%ecx, %%ebp;" */ \
                 "int $0x80;" \
-                "mov $0x2b,%%ecx;" \
+                /* "mov $0x2b,%%ecx;"            \
                 "mov %%ecx,%%ss;" \
                 "mov %%ebp,%%ecx;" \
-                /* "pop %%ebp;" */
+                "pop %%ebp;" */
 
 int open(const char* pathname, int flags, int mode)
 {
